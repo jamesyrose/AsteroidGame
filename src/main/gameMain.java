@@ -59,7 +59,6 @@ public class gameMain extends Application {
 	private static List<Bullet> bulletRemove  = new ArrayList<>();
 	private static List<Asteroid> asteroids = new ArrayList<>();
 	private static List<Asteroid> asteroidRemove = new ArrayList<>();
-	private static List<Asteroid> brokenAsteroid = new ArrayList<>();
     private static Text score = new Text();
     // Bars
     private static ProgressBar healthBar = new ProgressBar(1.0);
@@ -67,13 +66,35 @@ public class gameMain extends Application {
     // restart 
 	private static Button restart = new Button("Play Again");    
     
-	@Override
-	public void start(Stage window) throws Exception {
+	public void cleanup() {
+		// frame
+		rnd = new Random();
+		pane = new Pane();
+		pressedKeys = new HashMap<>();
+		// Counters
+		health = new AtomicInteger();
+		ammo = new AtomicInteger();
+		points = new AtomicInteger();
+		// Objects
+		stars = new ArrayList<>();
+		bullets = new ArrayList<>();
+		bulletRemove = new ArrayList<>();
+		asteroids = new ArrayList<>();
+		asteroidRemove = new ArrayList<>();
+		score = new Text();
+		// Bars
+		healthBar = new ProgressBar(1.0);
+		ammoBar = new ProgressBar(1.0);
+		//restart
+		restart = new Button("Play Again");
+	}
+	
+	public void startGame(Stage window) {
 		// restart 
 		restart.setOnAction(e -> {
-			window.close();
-			gameMain.main(new String[0]);
+			restart(window);
 		});
+		
 		// MainWindow Setup 
 		pane.setPrefSize(WIDTH, HEIGHT);
 		pane.setStyle("-fx-background-color: #000000;");
@@ -192,6 +213,16 @@ public class gameMain extends Application {
 		window.setScene(scene);
 		window.setTitle("Asteroid game");
 		window.show();
+	}
+
+	public void restart(Stage window) {
+		cleanup();
+		startGame(window);
+	}
+	
+	@Override
+	public void start(Stage window) throws Exception {
+		startGame(window);
 	}
 	
 	public static void endGame() {
@@ -374,7 +405,7 @@ public class gameMain extends Application {
 	
 	private static void shipAsteroidCollision(Asteroid asteroid) {
 		int points = asteroid.getPoint();
-		int healthLost = Math.floorDiv(points, 7);
+		int healthLost = Math.floorDiv(points, 10);
 		double healthLeft = health.getAndAdd(-healthLost) / (double) MAX_HEALTH;
 		asteroid.takeHealth(healthLost);
 		healthBar.setProgress(healthLeft);
@@ -385,7 +416,7 @@ public class gameMain extends Application {
 	
 	private static void bulletAsteroidCollision(Asteroid asteroid, Bullet bullet) {
 		if (asteroid.collide(bullet)) {
-			asteroid.takeHealth(1);
+			asteroid.takeHealth(2);
 			bulletRemove.add(bullet);
 			if (asteroid.getHp() < 1) {
 				asteroidRemove.add(asteroid);
@@ -408,8 +439,8 @@ public class gameMain extends Application {
 	}
 	
 	private static void addAmmoAndHealth() {
-        if (ammo.get() < MAX_AMMO - 10) {
-        	ammoBar.setProgress(ammo.addAndGet(10) / (double) MAX_AMMO);
+        if (ammo.get() < MAX_AMMO - 5) {
+        	ammoBar.setProgress(ammo.addAndGet(5) / (double) MAX_AMMO);
         } else {
         	int fill = (int) (MAX_AMMO - ammo.get());
         	ammoBar.setProgress(ammo.addAndGet(fill) / (double) MAX_AMMO);
