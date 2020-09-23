@@ -34,6 +34,7 @@ import javafx.stage.Popup;
 import javafx.stage.Stage;
 import pieces.Asteroid;
 import pieces.Bullet;
+import pieces.Health;
 import pieces.SpaceShip;
 
 public class gameMain extends Application {
@@ -59,13 +60,16 @@ public class gameMain extends Application {
 	private static List<Bullet> bulletRemove  = new ArrayList<>();
 	private static List<Asteroid> asteroids = new ArrayList<>();
 	private static List<Asteroid> asteroidRemove = new ArrayList<>();
+	private static List<Health> healthList = new ArrayList<>();
+	private static List<Health> healthRemove = new ArrayList<>();
     private static Text score = new Text();
     // Bars
     private static ProgressBar healthBar = new ProgressBar(1.0);
     private static ProgressBar ammoBar = new ProgressBar(1.0);
-    // restart 
+    // button
 	private static Button restart = new Button("Play Again");    
-    
+    private static Button closeGame = new Button("Close Game");
+	
 	public void cleanup() {
 		// frame
 		rnd = new Random();
@@ -81,18 +85,25 @@ public class gameMain extends Application {
 		bulletRemove = new ArrayList<>();
 		asteroids = new ArrayList<>();
 		asteroidRemove = new ArrayList<>();
+		healthList = new ArrayList<>();
+		healthRemove = new ArrayList<>();
 		score = new Text();
 		// Bars
 		healthBar = new ProgressBar(1.0);
 		ammoBar = new ProgressBar(1.0);
 		//restart
 		restart = new Button("Play Again");
+		closeGame = new Button("Close Game");
 	}
 	
 	public void startGame(Stage window) {
 		// restart 
 		restart.setOnAction(e -> {
 			restart(window);
+		});
+		
+		closeGame.setOnAction(e -> {
+			window.close();
 		});
 		
 		// MainWindow Setup 
@@ -169,6 +180,21 @@ public class gameMain extends Application {
 		            }
 		        }
 		        
+		        // Add Ammo and Asteroids
+		        if(Math.random() < 0.001) {
+		            Health hp = createHealth();
+		            healthList.add(hp);
+		            pane.getChildren().add(hp.getPiece());
+		        }
+		        healthList.stream().forEach(hp -> {
+		        	if (ship.collide(hp)) {
+		        		hpCollideShip(hp);
+		        	}
+		        });
+		        healthRemove.stream().forEach(hp -> {healthList.remove(hp);
+		        					pane.getChildren().remove(hp.getPiece());});
+		        healthRemove.clear();
+		        
 		        // Check if the ship has hit a rock  - end Game
 		        asteroids.forEach(asteroid -> {
 		            if (ship.collide(asteroid)) {
@@ -238,6 +264,7 @@ public class gameMain extends Application {
 		info.setLayoutX(WIDTH / 3);
 		info.setLayoutY(HEIGHT / 3);
 		info.setAlignment(Pos.CENTER);
+		info.setSpacing(10);
 		
 		// Text 
 		Text gameOver = new Text(0, 0, "GAME OVER");
@@ -267,9 +294,22 @@ public class gameMain extends Application {
 		info.getChildren().add(myScore);
 		
 		// Restart Button
+		restart.setMinWidth(WIDTH / 3);
+		restart.setTextAlignment(TextAlignment.CENTER);
+		restart.setStyle("-fx-stroke: white;"
+	    		+ "-fx-fill: white;"
+	    		+ "fx-stroke-width: 2;");
+		restart.setFont(Font.font("Verdana", 25));
 		info.getChildren().add(restart);
-		
-		
+		// close
+		closeGame.setMinWidth(WIDTH / 3);
+		closeGame.setTextAlignment(TextAlignment.CENTER);
+		closeGame.setStyle("-fx-stroke: white;"
+	    		+ "-fx-fill: white;"
+	    		+ "fx-stroke-width: 2;");
+		closeGame.setFont(Font.font("Verdana", 25));
+		info.getChildren().add(closeGame);
+		// Add to pane
 		pane.getChildren().add(info);
 
 	}
@@ -304,7 +344,7 @@ public class gameMain extends Application {
 	    FileWriter myWriter;
 		try {
 			myWriter = new FileWriter(file);
-			myWriter.write("" + score);
+			myWriter.write("" + points.get());
 			myWriter.close();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -316,6 +356,17 @@ public class gameMain extends Application {
 	    return false;
 	}
 
+	public Health createHealth() {
+		int xPos = rnd.nextInt(WIDTH);
+		int yPos = rnd.nextInt(HEIGHT);
+		Health hp = new Health(xPos, yPos);
+		hp.turnRight();
+		hp.turnRight();
+		hp.accelerate();
+		hp.accelerate();
+		return hp;
+	}
+	
 	public static Asteroid createAsteroid() {
 		int asteroidColor = rnd.nextInt(3) + 1;
 		int xPos = rnd.nextInt(WIDTH);
@@ -401,6 +452,16 @@ public class gameMain extends Application {
 	    pane.getChildren().add(healthLab);
 	    pane.getChildren().add(ammoBar);
 	    pane.getChildren().add(ammoLab);
+	}
+	
+	private static void hpCollideShip(Health hp) {
+		int healthleft = health.get();
+		int addHp = 10;
+		if (healthleft > MAX_HEALTH - 10) {
+			addHp = MAX_HEALTH - healthleft;
+		}
+		healthRemove.add(hp);
+		healthBar.setProgress((double) health.addAndGet(addHp) / (double) MAX_HEALTH);
 	}
 	
 	private static void shipAsteroidCollision(Asteroid asteroid) {
