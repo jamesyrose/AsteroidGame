@@ -49,10 +49,18 @@ public class PieceObject {
 	 
 	 public void turnLeft() {
 		 this.character.setRotate(this.character.getRotate() - 5);
+
+		 double changeX = Math.cos(Math.toRadians(this.character.getRotate()));
+		 double changeY = Math.sin(Math.toRadians(this.character.getRotate()));
+		 this.movement = new Point2D(changeX, changeY);
 	 }
 
 	 public void turnRight() {
 		 this.character.setRotate(this.character.getRotate() + 5);
+		 
+		 double changeX = Math.cos(Math.toRadians(this.character.getRotate()));
+		 double changeY = Math.sin(Math.toRadians(this.character.getRotate()));
+		 this.movement = new Point2D(changeX, changeY);
 	 }
 
 	 public void move() {	
@@ -81,8 +89,11 @@ public class PieceObject {
 
 		 changeX *= 0.05;
 		 changeY *= 0.05;
-
-		 this.movement = this.movement.add(changeX, changeY);
+		 
+		 Point2D newMovement = this.movement.add(changeX, changeY);
+		 if (newMovement.magnitude() < 4) {
+			 this.movement = newMovement;
+		 }
 	 }
 	 
 	 public void stop() {

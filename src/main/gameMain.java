@@ -1,5 +1,9 @@
 package main;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -7,105 +11,95 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.sun.prism.paint.Color;
 
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
-import javafx.beans.property.DoubleProperty;
+import javafx.geometry.Point2D;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.scene.shape.Circle;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
+import javafx.scene.text.TextAlignment;
+import javafx.stage.Popup;
 import javafx.stage.Stage;
 import pieces.Asteroid;
 import pieces.Bullet;
 import pieces.SpaceShip;
 
 public class gameMain extends Application {
+	// Hypers
 	public static int WIDTH = 900;
 	public static int HEIGHT = 900;
-	public static double MAX_AMMO = 200;
 	public static int STAR_COUNT = 75;
-	
+	public static int ASTEROID_COUNT = 15;
+	public static int MAX_HEALTH = 100;
+	public static int MAX_AMMO = 150;
+
+	// Frame
+    private static Random rnd = new Random();
+    private static List<Circle> stars = new ArrayList<>();
+    private static Pane pane = new Pane();
+    private static Map<KeyCode, Boolean> pressedKeys = new HashMap<>();
+    // Counters
+    private static AtomicInteger health = new AtomicInteger();
+    private static AtomicInteger ammo = new AtomicInteger();
+    private static AtomicInteger points = new AtomicInteger();
+    // Objects
+    private static List<Bullet> bullets = new ArrayList<>();
+	private static List<Bullet> bulletRemove  = new ArrayList<>();
+	private static List<Asteroid> asteroids = new ArrayList<>();
+	private static List<Asteroid> asteroidRemove = new ArrayList<>();
+	private static List<Asteroid> brokenAsteroid = new ArrayList<>();
+    private static Text score = new Text();
+    // Bars
+    private static ProgressBar healthBar = new ProgressBar(1.0);
+    private static ProgressBar ammoBar = new ProgressBar(1.0);
+    // restart 
+	private static Button restart = new Button("Play Again");    
+    
 	@Override
 	public void start(Stage window) throws Exception {
-		// KeyMap and Pane
-		Map<KeyCode, Boolean> pressedKeys = new HashMap<>();
-		Pane pane = new Pane();
+		// restart 
+		restart.setOnAction(e -> {
+			window.close();
+			gameMain.main(new String[0]);
+		});
+		// MainWindow Setup 
 		pane.setPrefSize(WIDTH, HEIGHT);
 		pane.setStyle("-fx-background-color: #000000;");
-
-		// Scoring 
-	    Text score = new Text(10, 20, "Points: 0");
-	    score.setStyle("-fx-stroke: white;"
-	    		+ "-fx-fill: white;"
-	    		+ "fx-stroke-width: 2;");
-	    score.setFont(Font.font("Verdana", 20));
-	    pane.getChildren().add(score);
-	    AtomicInteger points = new AtomicInteger();
+	    generateStars(); // Stars
+	    stars.stream().forEach(star -> pane.getChildren().add(star));
 	    
-	    
-	    // Ammo left
-	    Text ammoLab = new Text(10, 20, "Ammo");
-	    ammoLab.setStyle("-fx-stroke: white;"
-	    		+ "fx-stroke-width: 2;");
-	    ammoLab.setFont(Font.font("Verdana", 20));
-	    ammoLab.setTranslateY(HEIGHT - 55);
-	    ammoLab.setTranslateX(10);
-	    pane.getChildren().add(ammoLab);
-	    
-	    AtomicInteger ammo = new AtomicInteger();
-	    ammo.addAndGet(200);
-	    ProgressBar ammoBar = new ProgressBar(ammo.get() / MAX_AMMO);
-	    ammoBar.setTranslateY(HEIGHT - 50);
-	    ammoBar.setTranslateX(100);
-	    ammoBar.setMinWidth(WIDTH - 150);
-	    pane.getChildren().add(ammoBar);
-	    
-	    // Add Stars 
-	    Random rnd = new Random();
-	    for (int i=0; i<STAR_COUNT; i++) {
-	    	Circle star = new Circle();
-	    	star.setRadius(rnd.nextDouble() * 4);
-	    	star.setCenterX(rnd.nextInt(WIDTH));
-	    	star.setCenterY(rnd.nextInt(HEIGHT));
-	    	star.setFill(javafx.scene.paint.Color.WHITE);
-	    	pane.getChildren().add(star);
-	    }
+		// Scoring  
+	    createUserInfo();	    
 		
 		// Space Ship
 		SpaceShip ship = new SpaceShip(WIDTH / 2, HEIGHT / 2);
 		pane.getChildren().add(ship.getPiece());
 
 		// Asteroids
-		List<Asteroid> asteroids = new ArrayList<>();
-		List<Asteroid> asteroidRemove = new ArrayList<>();
-		for (int i = 0; i < 10; i++) {
+
+		for (int i = 0; i < ASTEROID_COUNT; i++) {
 			boolean asteroidNeeded= true;
 			while (asteroidNeeded) {
-				int xPos = rnd.nextInt(WIDTH);
-				int yPos =  rnd.nextInt(HEIGHT);
-			    Asteroid asteroid = new Asteroid(xPos, yPos);
-				// Make sure the asteroid isnt going to spawn in the ship
+				Asteroid asteroid = createAsteroid();
 				if (!asteroid.collide(ship)) {
-					asteroid.turnRight();
-					asteroid.turnRight();
-					asteroid.accelerate();
-					asteroid.accelerate();
 				    asteroids.add(asteroid);
 					pane.getChildren().add(asteroid.getPiece());;
 					asteroidNeeded = false;
 				}
 			}
 		}
-		// Bullets
-		List<Bullet> bullets = new ArrayList<>();
-		List<Bullet> bulletRemove  = new ArrayList<>();
-
-
 
 		
 		Scene scene = new Scene(pane, WIDTH, HEIGHT);
@@ -141,28 +135,15 @@ public class gameMain extends Application {
 		        }
 		        // Shooting
 		        if (pressedKeys.getOrDefault(KeyCode.SPACE, false) && ammo.get() > 0) {
-		            Bullet bullet = new Bullet((int) ship.getPiece().getTranslateX(), (int) ship.getPiece().getTranslateY());
-		            bullet.getPiece().setRotate(ship.getPiece().getRotate());
-		            bullets.add(bullet);
-
-		            bullet.accelerate();
-		            bullet.setMovement(bullet.getMovement().normalize().multiply(3));
-		            double ammoLeft = ammo.decrementAndGet() / MAX_AMMO;
-		            ammoBar.setProgress(ammoLeft);
-		            pane.getChildren().add(bullet.getPiece());
+		        	generateShot(ship);
 		        }
 		        
 		        // Add Ammo and Asteroids
 		        if(Math.random() < 0.01) {
-		            Asteroid asteroid = new Asteroid(WIDTH, HEIGHT);
+		            Asteroid asteroid = createAsteroid();
 		            if(!asteroid.collide(ship)) {
 		                asteroids.add(asteroid);
-		                if (ammo.get() < MAX_AMMO - 10) {
-		                	ammoBar.setProgress(ammo.addAndGet(10) / MAX_AMMO);
-		                } else {
-		                	int fill = (int) (MAX_AMMO - ammo.get());
-		                	ammoBar.setProgress(ammo.addAndGet(fill) / MAX_AMMO);
-		                }
+		                addAmmoAndHealth();
 		                pane.getChildren().add(asteroid.getPiece());
 		            }
 		        }
@@ -170,39 +151,34 @@ public class gameMain extends Application {
 		        // Check if the ship has hit a rock  - end Game
 		        asteroids.forEach(asteroid -> {
 		            if (ship.collide(asteroid)) {
-			        	pane.getChildren().remove(ship.getPiece());
 			        	pane.getChildren().remove(asteroid.getPiece());
-		                stop();
+			        	bullets.stream().forEach(bullet -> 
+			        		pane.getChildren().remove(bullet.getPiece()));
+		                shipAsteroidCollision(asteroid);
+		                if (health.get() < 0) {
+		                	healthBar.setProgress(0);
+		                	pane.getChildren().remove(ship.getPiece());
+		                	endGame();
+		                	stop();
+		                }
 		            }
 		        });
 
 		        // Bullets hitting Asteroids
 		        bullets.forEach((bullet) -> {
-		        	if (bullet.getPosX() > WIDTH - 5| bullet.getPosY() > HEIGHT - 5 | 
-		        			bullet.getPosX() < 5  | bullet.getPosY() < 5) {
-		        		pane.getChildren().remove(bullet.getPiece());
-		        		bulletRemove.add(bullet);
-		        	}
+		        	bulletOffMap(bullet);
 		        	asteroids.forEach(asteroid -> {
-		        		if (asteroid.collide(bullet)) {
-		        			pane.getChildren().remove(bullet.getPiece());
-		        			pane.getChildren().remove(asteroid.getPiece());
-		        			asteroidRemove.add(asteroid);
-		        			score.setText("Points: " + points.addAndGet(asteroid.getPoint()));
-		        			int addAmmo = Math.floorDiv(asteroid.getPoint(), 10);
-		        			int ammoLeft = ammo.get();
-		        			if (ammoLeft + addAmmo > MAX_AMMO) {
-		        				addAmmo = (int) (MAX_AMMO - ammoLeft);
-		        			}
-		        			ammoBar.setProgress(ammo.addAndGet(addAmmo) / MAX_AMMO);
-		        			System.out.println(ammo.get());
-		        		}
+		        		bulletAsteroidCollision(asteroid, bullet);
 		        	});
 		        });
 		        
 		        // Removing bullets and asteroids from arrayLists
-		        bulletRemove.stream().forEach(bullet -> bullets.remove(bullet));
-		        asteroidRemove.stream().forEach(asteroid -> asteroids.remove(asteroid));
+		        bulletRemove.stream().forEach(bullet -> {bullets.remove(bullet); 
+		        										pane.getChildren().remove(bullet.getPiece());
+		        										});
+		        asteroidRemove.stream().forEach(asteroid -> {asteroids.remove(asteroid); 
+		        											 pane.getChildren().remove(asteroid.getPiece()); 
+		        											 });
 		        
 		        // Move objects
 		        ship.move();
@@ -217,9 +193,233 @@ public class gameMain extends Application {
 		window.setTitle("Asteroid game");
 		window.show();
 	}
+	
+	public static void endGame() {
+		// Background
+		Rectangle endGameWindow = new Rectangle(WIDTH * 2 / 3, HEIGHT * 2 / 3);
+		endGameWindow.setStyle("-fx-border-style: solid; -fx-border-width: 5; -fx-border-color: white");
+		endGameWindow.setTranslateX(WIDTH / 6);
+		endGameWindow.setTranslateY(WIDTH / 6);
+		pane.getChildren().add(endGameWindow);
+		
+		// VBOX 
+		VBox info = new VBox();
+		info.setLayoutX(WIDTH / 3);
+		info.setLayoutY(HEIGHT / 3);
+		info.setAlignment(Pos.CENTER);
+		
+		// Text 
+		Text gameOver = new Text(0, 0, "GAME OVER");
+		gameOver.setTextAlignment(TextAlignment.CENTER);
+		gameOver.setStyle("-fx-stroke: white;"
+	    		+ "-fx-fill: white;"
+	    		+ "fx-stroke-width: 2;");
+		gameOver.setFont(Font.font("Verdana", 50));
+		info.getChildren().add(gameOver);
+		// Score
+		boolean newHighScore = checkAndWriteHighScore();
+		if (newHighScore) {
+			Text hs  = new Text(0, 0, "HIGH SCORE!!!!");
+			hs.setTextAlignment(TextAlignment.CENTER);
+			hs.setStyle("-fx-stroke: red;"
+		    		+ "-fx-fill: red;"
+		    		+ "fx-stroke-width: 2;");
+			hs.setFont(Font.font("Verdana", 40));
+			info.getChildren().add(hs);
+		}
+		Text myScore = new Text(0, 0, "Your Score: " + points.get());
+		myScore.setTextAlignment(TextAlignment.CENTER);
+		myScore.setStyle("-fx-stroke: white;"
+	    		+ "-fx-fill: white;"
+	    		+ "fx-stroke-width: 2;");
+		myScore.setFont(Font.font("Verdana", 30));
+		info.getChildren().add(myScore);
+		
+		// Restart Button
+		info.getChildren().add(restart);
+		
+		
+		pane.getChildren().add(info);
 
+	}
+	
+	public static boolean checkAndWriteHighScore() {
+	    // determine the high score
+		String file = "file:highScore.txt";
+	    int highScore = 0;
+	    try {
+	        BufferedReader reader = new BufferedReader(new FileReader(file));
+	        String line = reader.readLine();
+	        while (line != null)                 // read the score file line by line
+	        {
+	            try {
+	                int oldScore = Integer.parseInt(line.trim());   // parse each line as an int
+	                if (oldScore > highScore){ 
+	                    highScore = oldScore; 
+	                }
+	            } catch (NumberFormatException e1) {
+	                // ignore invalid scores
+	                //System.err.println("ignoring invalid score: " + line);
+	            }
+	            line = reader.readLine();
+	        }
+	        reader.close();
 
+	    } catch (IOException ex) {
+	        System.err.println("ERROR reading scores from file");
+	    }
+	    
+	    
+	    FileWriter myWriter;
+		try {
+			myWriter = new FileWriter(file);
+			myWriter.write("" + score);
+			myWriter.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		if (points.get() > highScore) {
+			return true;
+		}
+	    return false;
+	}
 
+	public static Asteroid createAsteroid() {
+		int asteroidColor = rnd.nextInt(3) + 1;
+		int xPos = rnd.nextInt(WIDTH);
+		int yPos =  rnd.nextInt(HEIGHT);
+	    Asteroid asteroid = new Asteroid(xPos, yPos, asteroidColor);
+		asteroid.turnRight();
+		asteroid.turnRight();
+		asteroid.accelerate();
+		asteroid.accelerate();
+		return asteroid;
+	}
+	
+	public static void generateShot(SpaceShip ship) {
+		ImageView ss = ship.getPiece();
+		int xPos = (int) (ss.getTranslateX() + ss.getFitWidth() / 3 + (Math.cos(Math.toRadians(ss.getRotate()))  * ss.getFitWidth() / 1.8));
+		int yPos = (int) (ss.getTranslateY() + ss.getFitHeight() / 3 + (Math.sin(Math.toRadians(ss.getRotate()))  * ss.getFitHeight() / 2));
+        Bullet bullet = new Bullet(xPos, yPos);
+        bullet.getPiece().setRotate(ship.getPiece().getRotate());
+        bullet.accelerate();
+        bullet.setMovement(bullet.getMovement().normalize().multiply(3));
+        bullets.add(bullet);
+        double ammoLeft = ammo.decrementAndGet() / (double) MAX_AMMO;
+        ammoBar.setProgress(ammoLeft);
+        pane.getChildren().add(bullet.getPiece());
+	}
+	
+	public static void generateStars() {
+	    // Add Stars 
+	    for (int i=0; i<STAR_COUNT; i++) {
+	    	Circle star = new Circle();
+	    	star.setRadius(rnd.nextDouble() * 4);
+	    	star.setCenterX(rnd.nextInt(WIDTH));
+	    	star.setCenterY(rnd.nextInt(HEIGHT));
+	    	star.setFill(javafx.scene.paint.Color.WHITE);
+	    	stars.add(star);
+	    }
+	}
+
+	private static void createUserInfo() {
+		// Scoring 
+	    score.setText("Score: 0");
+	    score.setTranslateX(15);
+	    score.setTranslateY(30);
+	    score.setStyle("-fx-stroke: white;"
+	    		+ "-fx-fill: white;"
+	    		+ "fx-stroke-width: 2;");
+	    score.setFont(Font.font("Verdana", 20));
+	    
+	    // Ammo left
+	    Text healthLab = new Text(10, 20, "Health");
+	    healthLab.setStyle("-fx-stroke: white;"
+	    		+ "-fx-fill: white;"
+	    		+ "fx-stroke-width: 2;");
+	    healthLab.setFont(Font.font("Verdana", 20));
+	    healthLab.setTranslateY(HEIGHT - 105);
+	    healthLab.setTranslateX(10);
+	    // Ammo Bar
+	    health.addAndGet(MAX_HEALTH);
+	    healthBar.setTranslateY(HEIGHT - 100);
+	    healthBar.setTranslateX(100);
+	    healthBar.setMinWidth(WIDTH - 150);
+	    healthBar.setStyle("-fx-accent: red; ");
+	    
+	    // Ammo left
+	    Text ammoLab = new Text(10, 20, "Ammo");
+	    ammoLab.setStyle("-fx-stroke: white;"
+	    		+ "-fx-fill: white;"
+	    		+ "fx-stroke-width: 2;");
+	    ammoLab.setFont(Font.font("Verdana", 20));
+	    ammoLab.setTranslateY(HEIGHT - 55);
+	    ammoLab.setTranslateX(10);
+	    
+	    // Ammo Bar
+	    ammo.addAndGet(MAX_AMMO);
+	    ammoBar.setTranslateY(HEIGHT - 50);
+	    ammoBar.setTranslateX(100);
+	    ammoBar.setMinWidth(WIDTH - 150);
+	    ammoBar.setStyle("-fx-accent: green;");
+	    
+	    // Add items to pane
+	    pane.getChildren().add(score);
+	    pane.getChildren().add(healthBar);
+	    pane.getChildren().add(healthLab);
+	    pane.getChildren().add(ammoBar);
+	    pane.getChildren().add(ammoLab);
+	}
+	
+	private static void shipAsteroidCollision(Asteroid asteroid) {
+		int points = asteroid.getPoint();
+		int healthLost = Math.floorDiv(points, 7);
+		double healthLeft = health.getAndAdd(-healthLost) / (double) MAX_HEALTH;
+		asteroid.takeHealth(healthLost);
+		healthBar.setProgress(healthLeft);
+		if (asteroid.getHp() < 1) {
+			asteroidRemove.add(asteroid);
+		}
+	}
+	
+	private static void bulletAsteroidCollision(Asteroid asteroid, Bullet bullet) {
+		if (asteroid.collide(bullet)) {
+			asteroid.takeHealth(1);
+			bulletRemove.add(bullet);
+			if (asteroid.getHp() < 1) {
+				asteroidRemove.add(asteroid);
+				score.setText("Points: " + points.addAndGet(asteroid.getPoint()));
+				int addAmmo = (int) Math.floorDiv(asteroid.getPoint() * 5,  4);
+				int ammoLeft = ammo.get();
+				if (ammoLeft + addAmmo > MAX_AMMO) {
+					addAmmo = (int) (MAX_AMMO - ammoLeft);
+				}
+				ammoBar.setProgress(ammo.addAndGet(addAmmo) / (double) MAX_AMMO);
+			}
+		}
+	}
+	
+	private static void bulletOffMap(Bullet bullet) {
+    	if (bullet.getPosX() > WIDTH - 5| bullet.getPosY() > HEIGHT - 5 | 
+    			bullet.getPosX() < 5  | bullet.getPosY() < 5) {
+    		bulletRemove.add(bullet);
+    	}
+	}
+	
+	private static void addAmmoAndHealth() {
+        if (ammo.get() < MAX_AMMO - 10) {
+        	ammoBar.setProgress(ammo.addAndGet(10) / (double) MAX_AMMO);
+        } else {
+        	int fill = (int) (MAX_AMMO - ammo.get());
+        	ammoBar.setProgress(ammo.addAndGet(fill) / (double) MAX_AMMO);
+        }
+        if (health.get() < MAX_HEALTH) {
+        	healthBar.setProgress(health.getAndIncrement() / (double) MAX_HEALTH);
+        }
+        
+	}
+	
 	public static void main(String[] args) {
 		launch();
 	}
